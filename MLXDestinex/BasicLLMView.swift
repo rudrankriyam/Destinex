@@ -22,6 +22,20 @@ enum LoadState: Equatable {
     }
 }
 
+struct MessageBubble: View {
+    let text: String
+    let isUser: Bool
+    
+    var body: some View {
+        Text(text)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 12)
+            .background(isUser ? Color.blue : Color(.systemGray6))
+            .foregroundColor(isUser ? .white : .primary)
+            .clipShape(RoundedRectangle(cornerRadius: 20))
+            .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
+    }
+}
 
 struct BasicLLMView: View {
     // Model Configuration
@@ -32,57 +46,94 @@ struct BasicLLMView: View {
     // State Variables
     @State private var modelContainer: ModelContainer? = nil
     @State private var loadState: LoadState = .idle
-    @State private var prompt: String = "Write a short poem about Swift programming:"
+    @State private var prompt: String = "What is the meaning of destiny?"
     @State private var generatedText: String = ""
     @State private var isGenerating: Bool = false
     
     var body: some View {
-        VStack {
-            Text("MLX Swift LLM Demo")
-                .font(.title)
-            
-            TextEditor(text: $prompt)
-                .frame(height: 100)
-                .border(Color.gray)
-                .padding(.horizontal)
-            
-            Button(isGenerating ? "Generating..." : "Generate Text") {
-                Task { await generate() }
-            }
-            .disabled(loadState != .ready || isGenerating)
-            .padding(.bottom)
-            
-            // Display Loading/Downloading State
-            switch loadState {
-            case .idle:
-                Text("Model not loaded yet.")
-            case .loading:
-                ProgressView("Loading Model...")
-            case .downloading(let progress):
-                ProgressView("Downloading: \(Int(progress.fractionCompleted * 100))%", value: progress.fractionCompleted)
-                    .padding(.horizontal)
-            case .ready:
-                Text("Model Ready.")
-                    .foregroundColor(.green)
-            case .error(let error):
-                Text("Error loading model: \(error.localizedDescription)")
-                    .foregroundColor(.red)
-            }
-            
-            ScrollView {
-                Text(generatedText)
+        VStack(spacing: 0) {
+            // Navigation bar
+            ZStack {
+                Color(.systemGray6)
+                    .ignoresSafeArea()
+                
+                Text("MLX Destinex")
+                    .font(.headline)
                     .padding()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .textSelection(.enabled) // Allow text selection
             }
+            .frame(height: 44)
             
-            Spacer()
+            // Chat area
+            ScrollView {
+                VStack(spacing: 16) {
+                    // Status messages
+                    Group {
+                        switch loadState {
+                        case .idle:
+                            Text("Model not loaded yet")
+                                .foregroundColor(.secondary)
+                        case .loading:
+                            HStack {
+                                ProgressView()
+                                Text("Loading Model...")
+                                    .foregroundColor(.secondary)
+                            }
+                        case .downloading(let progress):
+                            VStack(spacing: 4) {
+                                ProgressView(value: progress.fractionCompleted)
+                                    .progressViewStyle(.linear)
+                                    .frame(maxWidth: 200)
+                                Text("Downloading: \(Int(progress.fractionCompleted * 100))%")
+                                    .foregroundColor(.secondary)
+                            }
+                        case .ready:
+                            Text("Model Ready")
+                                .foregroundColor(.green)
+                        case .error(let error):
+                            Text("Error: \(error.localizedDescription)")
+                                .foregroundColor(.red)
+                        }
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 8)
+                    
+                    // Messages
+                    if !prompt.isEmpty {
+                        MessageBubble(text: prompt, isUser: true)
+                    }
+                    
+                    if !generatedText.isEmpty {
+                        MessageBubble(text: generatedText, isUser: false)
+                    }
+                }
+                .padding()
+            }
+            .background(Color(.systemGroupedBackground))
+            
+            // Input area
+            VStack(spacing: 0) {
+                Divider()
+                HStack(spacing: 12) {
+                    TextField("Type your message...", text: $prompt)
+                        .padding(12)
+                        .background(Color(.systemGray6))
+                        .cornerRadius(20)
+                    
+                    Button(action: { 
+                        Task { await generate() }
+                    }) {
+                        Image(systemName: isGenerating ? "stop.circle.fill" : "arrow.up.circle.fill")
+                            .font(.system(size: 32))
+                            .foregroundColor(prompt.isEmpty ? .gray : .blue)
+                    }
+                    .disabled(loadState != .ready || isGenerating || prompt.isEmpty)
+                }
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(Color(.systemBackground))
+            }
         }
-        .padding()
-        // Use task modifier for async work tied to view lifecycle
-        .task {
-            await loadModel()
-        }
+        .task { await loadModel() }
     }
     
     // Function to load the model asynchronously
@@ -91,7 +142,6 @@ struct BasicLLMView: View {
         loadState = .loading
         do {
             // Use the shared factory to load the container
-            // CHANGE: Use Task { @MainActor in ... } instead of await MainActor.run to keep the closure synchronous
             let loadedContainer = try await LLMModelFactory.shared.loadContainer(configuration: modelConfiguration) { progress in
                 // Update state on main actor asynchronously without awaiting
                 Task { @MainActor in
@@ -122,7 +172,6 @@ struct BasicLLMView: View {
         
         await MainActor.run {
             isGenerating = true
-            generatedText = "Generating..." // Initial message
         }
         
         do {
@@ -161,6 +210,7 @@ struct BasicLLMView: View {
         
         await MainActor.run {
             isGenerating = false // Reset generation state
+            prompt = "" // Clear the input after sending
         }
     }
 }
