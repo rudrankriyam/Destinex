@@ -68,6 +68,7 @@ struct InputSectionView: View {
   let documentTexts: [String]
   let isProcessing: Bool
   let isModelReady: Bool
+  var queryFieldFocus: FocusState<Bool>.Binding
   let findAction: () -> Void
 
   var body: some View {
@@ -80,6 +81,7 @@ struct InputSectionView: View {
           .textFieldStyle(.roundedBorder)
           .lineLimit(2...)
           .padding(.horizontal, 4)
+          .focused(queryFieldFocus)
       }
 
       VStack(alignment: .leading, spacing: 8) {
@@ -113,7 +115,6 @@ struct InputSectionView: View {
           }
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 12)
       }
       .buttonStyle(.borderedProminent)
       .controlSize(.large)
@@ -249,6 +250,7 @@ struct TextEmbeddingsView: View {
   ]
   @State private var rankedResults: [DocumentResult] = []
   @State private var processingError: String?
+  @FocusState private var isQueryFieldFocused: Bool
 
   // --- Model Configuration ---
   let modelConfiguration = ModelConfiguration.minilm_l12
@@ -291,6 +293,7 @@ struct TextEmbeddingsView: View {
           documentTexts: documentTexts,
           isProcessing: isProcessing,
           isModelReady: isModelReady,
+          queryFieldFocus: $isQueryFieldFocused,
           findAction: { Task { await generateEmbeddingsAndCompare() } }
         )
 
@@ -334,6 +337,8 @@ struct TextEmbeddingsView: View {
   }
 
   func generateEmbeddingsAndCompare() async {
+    isQueryFieldFocused = false
+
     guard let container = modelContainer, loadState == .ready else {
       await MainActor.run { processingError = "Model not ready." }
       return
@@ -353,7 +358,7 @@ struct TextEmbeddingsView: View {
 
     do {
       // Generate embeddings for all texts in one batch
-      let rawEmbeddingsMLX: MLXArray = try await container.perform {
+      let rawEmbeddingsMLX: MLXArray = await container.perform {
         (model: EmbeddingModel, tokenizer: Tokenizer, pooling: Pooling) -> MLXArray in
 
         let tokenizedInputs = allTexts.map {
