@@ -358,64 +358,62 @@ struct TextEmbeddingsView: View {
 
     do {
       // Generate embeddings for all texts in one batch
-      let rawEmbeddingsMLX: MLXArray = await container.perform {
-        (model: EmbeddingModel, tokenizer: Tokenizer, pooling: Pooling) -> MLXArray in
+      let embeddingsFloats: [[Float]] = try await container.perform {
+        (model: EmbeddingModel, tokenizer: Tokenizer, pooling: Pooling) -> [[Float]] in
 
         let tokenizedInputs = allTexts.map {
           tokenizer.encode(text: $0, addSpecialTokens: true)
         }
 
-        let maxLength = tokenizedInputs.reduce(0) { max($0, $1.count) }
-
-        let paddingTokenId = tokenizer.eosTokenId ?? 0
-        let paddingTokenId32 = Int32(paddingTokenId)
-
-        let inputIDsList: [[Int32]] = tokenizedInputs.map { ids -> [Int32] in
-          let paddingCount = maxLength - ids.count
-          return (ids.map { Int32($0) } + Array(repeating: paddingTokenId32, count: paddingCount))
+        // Pad to longest, with a minimum length of 16
+        let maxLength = tokenizedInputs.reduce(into: 16) { acc, elem in
+          acc = max(acc, elem.count)
         }
 
-        // CHANGE: Flatten the list and provide the shape
-        let flattenedIDs = inputIDsList.flatMap { $0 }
-        let shape = [inputIDsList.count, maxLength]
-        let inputIDs = MLXArray(flattenedIDs, shape)
+        let paddingTokenId = tokenizer.eosTokenId ?? 0
 
-        let attentionMask = (inputIDs .!= paddingTokenId32)
-        let tokenTypeIDs = MLXArray.zeros(inputIDs.shape, dtype: .int32)
+        // Create the padded batch using stacked
+        let paddedInputIDs = stacked(
+          tokenizedInputs.map { ids in
+            MLXArray(
+              ids + Array(repeating: paddingTokenId, count: maxLength - ids.count)
+            )
+          }
+        )
 
-        // Create position IDs: [0, 1, 2, ..., sequenceLength - 1]
-        let sequenceLength = inputIDs.shape[1]
-        let positionIDs = MLXArray.arange(sequenceLength)
+        // Create mask based on padding token
+        let attentionMask = (paddedInputIDs .!= paddingTokenId)
+        // Create token type IDs (usually zeros for sentence pair tasks, but just zeros here)
+        let tokenTypeIDs = MLXArray.zeros(like: paddedInputIDs)
 
-        // Pass positionIDs to the model call
+        // Pass nil for positionIds as the model can often infer them
         let modelOutput = model(
-          inputIDs, positionIds: positionIDs, tokenTypeIds: tokenTypeIDs,
-          attentionMask: attentionMask)
+          paddedInputIDs, positionIds: nil, tokenTypeIds: tokenTypeIDs,
+          attentionMask: attentionMask
+        )
 
-        // Pass the entire EmbeddingModelOutput to the pooling function
+        // Pool the embeddings, passing normalize and applyLayerNorm flags
+        // Remove explicit mask parameter if pooling handles it via modelOutput
         let finalEmbeddings = pooling(
-          modelOutput,  // Pass the whole object
-          mask: attentionMask,
+          modelOutput,
           normalize: true,
           applyLayerNorm: true
         )
 
         finalEmbeddings.eval()
-        return finalEmbeddings
-      }
 
-      // CHANGE: Convert the resulting MLXArray to [[Float]] here
-      guard rawEmbeddingsMLX.dtype == .float32 else {
-        throw NSError(
-          domain: "EmbeddingError", code: 3,
-          userInfo: [
-            NSLocalizedDescriptionKey:
-              "Unexpected embedding dtype after perform: \(rawEmbeddingsMLX.dtype)"
-          ])
-      }
-      var embeddingsFloats: [[Float]] = []
-      for i in 0..<rawEmbeddingsMLX.shape[0] {
-        embeddingsFloats.append(rawEmbeddingsMLX[i].asArray(Float.self))
+        // Convert to [[Float]] before returning from the closure
+        guard finalEmbeddings.dtype == .float32 else {
+          // Throwing inside the closure will propagate out
+          throw NSError(
+            domain: "EmbeddingError", code: 3,
+            userInfo: [
+              NSLocalizedDescriptionKey:
+                "Unexpected embedding dtype from pooling: \(finalEmbeddings.dtype)"
+            ]
+          )
+        }
+        return finalEmbeddings.map { $0.asArray(Float.self) }
       }
 
       guard let queryEmbedding = embeddingsFloats.first else {
