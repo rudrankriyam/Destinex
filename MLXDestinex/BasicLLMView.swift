@@ -30,7 +30,7 @@ struct MessageBubble: View {
         Text(text)
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
-            .background(isUser ? Color.blue : Color(.systemGray6))
+            .background(isUser ? Color.indigo : Color(.systemGray6))
             .foregroundColor(isUser ? .white : .primary)
             .clipShape(RoundedRectangle(cornerRadius: 20))
             .frame(maxWidth: .infinity, alignment: isUser ? .trailing : .leading)
@@ -124,7 +124,7 @@ struct BasicLLMView: View {
                     }) {
                         Image(systemName: isGenerating ? "stop.circle.fill" : "arrow.up.circle.fill")
                             .font(.system(size: 32))
-                            .foregroundColor(prompt.isEmpty ? .gray : .blue)
+                            .foregroundColor(prompt.isEmpty ? .gray : .indigo)
                     }
                     .disabled(loadState != .ready || isGenerating || prompt.isEmpty)
                 }
