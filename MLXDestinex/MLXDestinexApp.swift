@@ -11,7 +11,7 @@ import SwiftUI
 struct MLXDestinexApp: App {
     var body: some Scene {
         WindowGroup {
-            BasicLLMView()
+            TextEmbeddingsView()
         }
     }
 }
