@@ -10,13 +10,25 @@ enum LoadState: Equatable {
     case downloading(Progress)
     case ready
     case error(Error)
-    
-    // Conformance for Equatable, ignoring associated values for simplicity here
+
+    // CHANGE: Make Equatable conformance compare associated values for .downloading and .error
     static func == (lhs: LoadState, rhs: LoadState) -> Bool {
         switch (lhs, rhs) {
-        case (.idle, .idle), (.loading, .loading), (.downloading, .downloading), (.ready, .ready), (.error, .error):
-            return true // Basic comparison; doesn't compare associated values like Progress or Error
+        case (.idle, .idle):
+            return true
+        case (.loading, .loading):
+            return true
+        case (.downloading(let lhsProgress), .downloading(let rhsProgress)):
+            // Compare relevant properties of Progress, e.g., fractionCompleted
+            return lhsProgress.fractionCompleted == rhsProgress.fractionCompleted &&
+                   lhsProgress.localizedDescription == rhsProgress.localizedDescription // Optional: Compare description too
+        case (.ready, .ready):
+            return true
+        case (.error(let lhsError), .error(let rhsError)):
+            // Compare errors based on their description or domain/code
+            return lhsError.localizedDescription == rhsError.localizedDescription
         default:
+            // Different enum cases are not equal
             return false
         }
     }
