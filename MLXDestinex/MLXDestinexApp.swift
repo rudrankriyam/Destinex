@@ -16,15 +16,20 @@ struct MLXDestinexApp: App {
                     .tabItem {
                         Label("Embeddings", systemImage: "brain.head.profile")
                     }
-                
+
                 BasicLLMView()
                     .tabItem {
                         Label("LLM", systemImage: "text.bubble")
                     }
-                
+
                 ModelComponentsView(modelId: "mlx-community/Qwen3-1.7B-4bit")
                     .tabItem {
                         Label("Components", systemImage: "square.and.arrow.up")
+                    }
+
+                SettingsView()
+                    .tabItem {
+                        Label("Settings", systemImage: "gear")
                     }
             }
         }
