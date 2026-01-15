@@ -1,4 +1,6 @@
 # Destinex
+[![Star History Chart](https://api.star-history.com/svg?repos=rudrankriyam/Destinex&type=Date)](https://star-history.com/#rudrankriyam/Destinex&Date)
+
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT) 
 
